@@ -60,12 +60,12 @@ def find_wnc_usb_device():
 def find_wnc_comport():
     if find_wnc_usb_device() == True :
         # Find the last 3 entries in dmesg and pick off the 1st one that will be AT port
-        subprocess.call("dmesg | grep cdc_acm | tail -3 | head -1 > wnc_dev.lst", shell=True)
+        subprocess.call("dmesg | grep ttyACM | tail -3 | head -1 > wnc_dev.lst", shell=True)
         if os.path.getsize("wnc_dev.lst") > 0 :
             for i in range(0,10) :
-                subprocess.call("dmesg | grep cdc_acm | tail -3 | head -1 | grep ttyACM" + str(i) + " > wnc_dev.lst", shell=True)
+                subprocess.call("dmesg | grep ttyACM | tail -3 | head -1 | grep ttyACM" + str(i) + " > wnc_dev.lst", shell=True)
                 if os.path.getsize("wnc_dev.lst") > 0 :
-                    subprocess.call("rm wnc_dev.lst", shell=True)                
+                    subprocess.call("rm wnc_dev.lst", shell=True)
                     print "Found WNC ttyACM" + str(i) + " device"
                     return "/dev/ttyACM" + str(i)
         subprocess.call("rm wnc_dev.lst", shell=True)
@@ -616,6 +616,7 @@ try :
                 sense.clear()
                 subprocess.call("sudo shutdown -r now &", shell=True)
                 exit(0)
+
 except KeyboardInterrupt:
     my_ctrl_c_exit(eth_dev)
 except:
