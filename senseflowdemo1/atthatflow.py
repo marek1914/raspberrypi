@@ -49,16 +49,6 @@ def main():
     FLOW_SERVER_URL1 = 'runm-east.att.io'
     FLOW_BASE_URL1 = '/ce323678bacc7/d235133ae3dc/0e68c11f947776c/in/flow'
     FLOW_INPUT_NAME1 = "/climate"
-    MAX_NUM_SENSORS = 8
-    MAX_NUM_SENSE_ROWS = 8
-    REBOOT_HOLD_TIME = 10
-    NUM_POSITION_READINGS_AVG = 1
-    DISCONNECTED_LED_RGB_HTTP = [64, 0, 0]
-    DISCONNECTED_LED_RGB = [64, 64, 64]
-    UART_READ_TIMEOUT_SECS = 2
-    WATCHDOG_CNT_MAX = 10
-    HTTP_CONNECTION_TIMEOUT = 10
-    FIRMWARE_PATH = '/home/pi/senseflowdemo1'
 
     # Assign server based upon selected ID
     UrlById = [FLOW_SERVER_URL1,
@@ -78,6 +68,17 @@ def main():
                     FLOW_BASE_URL1 + FLOW_INPUT_NAME1,
                     FLOW_BASE_URL1 + FLOW_INPUT_NAME1,
                     FLOW_BASE_URL1 + FLOW_INPUT_NAME1]
+                    
+    MAX_NUM_SENSORS = 12
+    MAX_NUM_SENSE_ROWS = 8
+    REBOOT_HOLD_TIME = 10
+    NUM_POSITION_READINGS_AVG = 1
+    DISCONNECTED_LED_RGB_HTTP = [64, 0, 0]
+    DISCONNECTED_LED_RGB = [64, 64, 64]
+    UART_READ_TIMEOUT_SECS = 2
+    WATCHDOG_CNT_MAX = 10
+    HTTP_CONNECTION_TIMEOUT = 10
+    FIRMWARE_PATH = '/home/pi/senseflowdemo1'
     
     parse_cmd_line()
 
@@ -156,12 +157,8 @@ def main():
                     if (id < 1) :
                          id = MAX_NUM_SENSORS 
                     if (button_events.direction == "middle") :
-                        idIsNotDone = 0 
-                if id < 10 :
-                    SENSE.show_letter(str(id), text_colour = [255,0,0], back_colour = [0,0,255])
-                else :
-                    SENSE.show_message(str(id) + " ", scroll_speed = 0.05, text_colour = [255, 0, 0], back_colour = [0,0,255])
-                    SENSE.show_letter('#', text_colour = [255,0,0], back_colour = [0,0,255])
+                        idIsNotDone = 0
+                    display_id(id, SENSE, MAX_NUM_SENSORS)                        
         
         if (id > 99) :
             serialName = "SenseHat" + str(id)    
@@ -353,8 +350,8 @@ def main():
                             bars_on = True
                         elif action == 'signaloff' :
                             bars_on = False
-                        elif action == 'none' :
-                            action = 'none'
+                        elif action == 'none' or action == 'msg' :
+                            action = action
                         else :
                             SENSE.show_message("Unknown action: " + action, scroll_speed = 0.05, text_colour = [255, 255, 0])
 
@@ -590,7 +587,7 @@ def display_bars(bars, sense_hat):
          b,f,b,f,b,f,b,f,
          b,f,b,f,b,f,b,f]
 
-    sense_hat.clear()
+#    sense_hat.clear()
     sense_hat.set_pixels(rgb_pixels)
 
 def parse_cmd_line() :
@@ -654,12 +651,59 @@ def parse_cmd_line() :
         print_usage()
         exit(0)
 
+def display_id(id, sense_hat, max_num_sensors) :
+    if id < 1 or id > max_num_sensors :
+        sense_hat.show_message("Invalid ID: " + str(id), scroll_speed = 0.05, text_colour = [255, 0, 0], back_colour = [0,0,0])
+        return
+
+    f = [255,0,0]
+    b = [0,0,255]
+
+    rgb_pixels_10 = \
+        [b,b,b,b,b,b,b,b,
+         b,f,b,b,f,f,b,b,
+         b,f,b,f,b,b,f,b,
+         b,f,b,f,b,b,f,b,
+         b,f,b,f,b,b,f,b,
+         b,f,b,f,b,b,f,b,
+         b,f,b,b,f,f,b,b,
+         b,b,b,b,b,b,b,b]
+
+    rgb_pixels_11 = \
+        [b,b,b,b,b,b,b,b,
+         b,f,b,b,b,f,b,b,
+         b,f,b,b,b,f,b,b,
+         b,f,b,b,b,f,b,b,
+         b,f,b,b,b,f,b,b,
+         b,f,b,b,b,f,b,b,
+         b,f,b,b,b,f,b,b,
+         b,b,b,b,b,b,b,b]
+         
+    rgb_pixels_12 = \
+        [b,b,b,b,b,b,b,b,
+         b,f,b,b,f,f,b,b,
+         b,f,b,f,b,b,f,b,
+         b,f,b,b,b,f,b,b,
+         b,f,b,b,f,b,b,b,
+         b,f,b,f,b,b,b,b,
+         b,f,b,f,f,f,f,b,
+         b,b,b,b,b,b,b,b]
+
+    if id < 10 :
+        sense_hat.show_letter(str(id), text_colour = [255,0,0], back_colour = [0,0,255])
+    elif id == 10 :
+        sense_hat.set_pixels(rgb_pixels_10)
+    elif id == 11 :
+        sense_hat.set_pixels(rgb_pixels_11)
+    elif id == 12 :
+        sense_hat.set_pixels(rgb_pixels_12)
+
 try :
     main()
 except :
     my_ctrl_c_exit(ETH_DEV)   
-#except Exception as ex:
+    #except Exception as ex:
     #import traceback
     #print traceback.format_exc()    
     #import pdb
-    #pdb.post_mortem()    
+    #pdb.post_mortem()
