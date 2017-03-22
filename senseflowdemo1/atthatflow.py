@@ -26,284 +26,110 @@ import subprocess
 import httplib
 import json
 
+# Global variables that contains the cell modem device names
 eth_dev = "none"
 com_dev = "none"
 
-def print_usage() :
-    print
-    print 'usage: atthatflow.py [emu_cell | noemu_cell | emu_nocell | noemu_nocell]'
-    print
-    print 'If no command lines then default is virtual sense hat and no cellular modem'
-    print
-    print '    emu_cell = Use Virtual Sense Emulator and Cellular WNC modem'
-    print '    noemu_cell = Use real Sense Emulator and Cellular WNC modem'
-    print '    emu_nocell = Use Virtual Sense Emulator and use other internet connection'
-    print '    moemu_nocell = Use real Sense Emulator and use other internet connection'
-    print
+def main():
 
-def my_ctrl_c_exit(eth_dev) :
-    if eth_dev <> "none" :
-        subprocess.call("sudo route delete default " + eth_dev, shell=True)
-        print "Deleting WNC modem " + eth_dev + " from default route table"
-    os._exit(-1)  #  plain exit() raises exceptions and doesn't truly exit, this one does!
-
-def display_mdm_bars(mdm, sense_hat):
-    bars = mdm.calc_rx_bars(1)  # Danger danger, leave at 1, 14A2A can't handle back to back
-    display_bars(bars, sense_hat)
+    global eth_dev
+    global com_dev
     
-def find_wnc_usb_device():        
-    subprocess.call("lsusb -t -d 1435:3142 | grep acm > wnc_dev.lst", shell=True)
-    result = os.path.getsize("wnc_dev.lst") > 0
-    subprocess.call("rm wnc_dev.lst", shell=True)
-    return result
+    ######################################################
+    #  A few setup items:
+    ######################################################
+        
+    # Base parameters used to connect to the FLOW demo
+    FLOW_SERVER_URL1 = 'runm-east.att.io'
+    FLOW_BASE_URL1 = '/ce323678bacc7/d235133ae3dc/0e68c11f947776c/in/flow'
+    FLOW_INPUT_NAME1 = "/climate"
+    MAX_NUM_SENSORS = 8
+    MAX_NUM_SENSE_ROWS = 8
+    REBOOT_HOLD_TIME = 10
+    NUM_POSITION_READINGS_AVG = 1
+    DISCONNECTED_LED_RGB_HTTP = [64, 0, 0]
+    DISCONNECTED_LED_RGB = [64, 64, 64]
+    UART_READ_TIMEOUT_SECS = 2
+    WATCHDOG_CNT_MAX = 10
+    HTTP_CONNECTION_TIMEOUT = 10
+    FIRMWARE_PATH = '/home/pi/senseflowdemo1'
 
-def find_wnc_comport():
-    if find_wnc_usb_device() == True :
-        # Find the last 3 entries in dmesg and pick off the 1st one that will be AT port
-        subprocess.call("dmesg | grep ttyACM | tail -3 | head -1 > wnc_dev.lst", shell=True)
-        if os.path.getsize("wnc_dev.lst") > 0 :
-            for i in range(0,10) :
-                subprocess.call("dmesg | grep ttyACM | tail -3 | head -1 | grep ttyACM" + str(i) + " > wnc_dev.lst", shell=True)
-                if os.path.getsize("wnc_dev.lst") > 0 :
-                    subprocess.call("rm wnc_dev.lst", shell=True)
-                    print "Found WNC ttyACM" + str(i) + " device"
-                    return "/dev/ttyACM" + str(i)
-        subprocess.call("rm wnc_dev.lst", shell=True)
-    print "WNC serial port not found!"
-    return "none"
+    # Assign server based upon selected ID
+    UrlById = [FLOW_SERVER_URL1,
+               FLOW_SERVER_URL1,
+               FLOW_SERVER_URL1,
+               FLOW_SERVER_URL1,
+               FLOW_SERVER_URL1,
+               FLOW_SERVER_URL1,
+               FLOW_SERVER_URL1,
+               FLOW_SERVER_URL1]
 
-def find_wnc_eth(eth_dev):
-    if eth_dev <> "none" :
-        print "Remove " + eth_dev + " from global route table"    
-        subprocess.call("sudo route delete default " + eth_dev, shell=True)    
-    if find_wnc_usb_device() == True :
-        # Try to find which eth it's at:
-        for i in range(0,10):
-            subprocess.call("dmesg | grep cdc_ether | grep eth" + str(i) + " | tail -1 > wnc_dev.lst", shell=True)
-            if os.path.getsize("wnc_dev.lst") > 0 :
-                subprocess.call("rm wnc_dev.lst", shell=True)
-                eth_dev = "eth" + str(i)
-                print "Found WNC " + eth_dev
-                # Try to make the IP traffic use the cellular modem which should which show up as ethX
-                print "Making " + eth_dev + " be default in global route table"
-                subprocess.call("sudo route add default " + eth_dev, shell=True)
-                return "eth" + str(i)
-        subprocess.call("rm wnc_dev.lst", shell=True)
-    print "WNC eth not found!"
-    return "none"
+    FlowPathById = [FLOW_BASE_URL1 + FLOW_INPUT_NAME1,
+                    FLOW_BASE_URL1 + FLOW_INPUT_NAME1,
+                    FLOW_BASE_URL1 + FLOW_INPUT_NAME1,
+                    FLOW_BASE_URL1 + FLOW_INPUT_NAME1,
+                    FLOW_BASE_URL1 + FLOW_INPUT_NAME1,
+                    FLOW_BASE_URL1 + FLOW_INPUT_NAME1,
+                    FLOW_BASE_URL1 + FLOW_INPUT_NAME1,
+                    FLOW_BASE_URL1 + FLOW_INPUT_NAME1]
 
-def find_wnc_devices(eth_dev):
-    com_dev = find_wnc_comport()
-    eth_dev = find_wnc_eth(eth_dev)
-    return com_dev, eth_dev
-
-def wait_for_at_ok(mdm, sense_hat, debug=False) :
-    sense_hat.show_message("Wait for AT OK", scroll_speed = 0.03, text_colour = [255, 0, 0])
-    cnt = 0
-    while 1:
-        result, resp = mdm.send_mdm_cmd('AT', timeout=1)
-        sense_hat.show_message(".", scroll_speed = 0.01, text_colour = [255, 0, 0])
-        if result == True :
-           cnt += 1
+    # Parse command line inputs to setup emu or sense hat or cell or no cell:
+    if len(sys.argv) == 1 :
+        # Try to autodetect sense hat and cellular modem
+        try :
+            from sense_hat import SenseHat
+            sense = SenseHat()
+            USE_VIRTUAL_SENSE_HAT = False
+            print "Real Sense Hat Detected"
+        except KeyboardInterrupt :
+            my_ctrl_c_exit(eth_dev)
+        except :
+            from sense_emu import SenseHat
+            sense = SenseHat()
+            sense.clear()     
+            USE_VIRTUAL_SENSE_HAT = True 
+            print "Using Sense Hat Emulator"
+        com_dev, eth_dev = find_wnc_devices(eth_dev)
+        USE_CELL_MODEM = com_dev <> "none"    
+    elif len(sys.argv) == 2 :
+        if sys.argv[1] == '--help' :
+            print_usage()
+            exit(0)
+        elif sys.argv[1] == 'emu_cell' :
+            USE_VIRTUAL_SENSE_HAT = True
+            com_dev, eth_dev = find_wnc_devices(eth_dev)
+            USE_CELL_MODEM = com_dev <> "none"    
+        elif sys.argv[1] == 'noemu_cell' :
+            USE_VIRTUAL_SENSE_HAT = False
+            com_dev, eth_dev = find_wnc_devices(eth_dev)
+            USE_CELL_MODEM = com_dev <> "none"    
+        elif sys.argv[1] == 'emu_nocell' :
+            USE_VIRTUAL_SENSE_HAT = True
+            USE_CELL_MODEM = False
+            eth_dev = find_wnc_eth(eth_dev)
+        elif sys.argv[1] == 'noemu_nocell' :
+            USE_VIRTUAL_SENSE_HAT = False
+            USE_CELL_MODEM = False
+            eth_dev = find_wnc_eth(eth_dev)        
+        if USE_VIRTUAL_SENSE_HAT == True :
+            from sense_emu import SenseHat
+            print "Using Sense Hat Emulator"
         else :
-           cnt = 0
-        if cnt >= 4 :
-            sense_hat.show_message("AT OK", scroll_speed = 0.03, text_colour = [255, 0, 0])
-            break
-
-def make_rainbow(sense_hat, num_display_secs) :
-    from colorsys import hsv_to_rgb
-    from time import sleep
-    from time import time
-
-    # Hues represent the spectrum of colors as values between 0 and 1. The range
-    # is circular so 0 represents red, ~0.2 is yellow, ~0.33 is green, 0.5 is cyan,
-    # ~0.66 is blue, ~0.84 is purple, and 1.0 is back to red. These are the initial
-    # hues for each pixel in the display.
-    hues = [
-        0.00, 0.00, 0.06, 0.13, 0.20, 0.27, 0.34, 0.41,
-        0.00, 0.06, 0.13, 0.21, 0.28, 0.35, 0.42, 0.49,
-        0.07, 0.14, 0.21, 0.28, 0.35, 0.42, 0.50, 0.57,
-        0.15, 0.22, 0.29, 0.36, 0.43, 0.50, 0.57, 0.64,
-        0.22, 0.29, 0.36, 0.44, 0.51, 0.58, 0.65, 0.72,
-        0.30, 0.37, 0.44, 0.51, 0.58, 0.66, 0.73, 0.80,
-        0.38, 0.45, 0.52, 0.59, 0.66, 0.73, 0.80, 0.87,
-        0.45, 0.52, 0.60, 0.67, 0.74, 0.81, 0.88, 0.95,
-    ]
-    def scale(v):
-        return int(v*255)
-
-    num_display_secs = abs(num_display_secs)
-    startTime = time() + 1
-    while (time() - startTime) >= num_display_secs :
-        # Rotate the hues
-        hues = [(h + 0.01) % 1.0 for h in hues]
-        # Convert the hues to RGB values
-        pixels = [hsv_to_rgb(h, 1.0, 1.0) for h in hues]
-        # hsv_to_rgb returns 0..1 floats; convert to ints in the range 0..255
-        pixels = [(scale(r), scale(g), scale(b)) for r, g, b in pixels]
-        # Update the display
-        sense_hat.set_pixels(pixels)
-        sleep(0.04)
-
-# Parse command line input:
-if len(sys.argv) == 1 :
-    # Try to autodetect sense hat and cellular modem
-    try :
-        from sense_hat import SenseHat
+            from sense_hat import SenseHat
+            print "Real Sense Hat Detected"
         sense = SenseHat()
-        USE_VIRTUAL_SENSE_HAT = False
-        print "Real Sense Hat Detected"
-    except KeyboardInterrupt :
-        my_ctrl_c_exit(eth_dev)
-    except :
-        from sense_emu import SenseHat
-        sense = SenseHat()
-        sense.clear()     
-        USE_VIRTUAL_SENSE_HAT = True 
-        print "Using Sense Hat Emulator"
-    com_dev, eth_dev = find_wnc_devices(eth_dev)
-    USE_CELL_MODEM = com_dev <> "none"    
-elif len(sys.argv) == 2 :
-    if sys.argv[1] == '--help' :
+        sense.clear()
+    else:
         print_usage()
         exit(0)
-    elif sys.argv[1] == 'emu_cell' :
-        USE_VIRTUAL_SENSE_HAT = True
-        com_dev, eth_dev = find_wnc_devices(eth_dev)
-        USE_CELL_MODEM = com_dev <> "none"    
-    elif sys.argv[1] == 'noemu_cell' :
-        USE_VIRTUAL_SENSE_HAT = False
-        com_dev, eth_dev = find_wnc_devices(eth_dev)
-        USE_CELL_MODEM = com_dev <> "none"    
-    elif sys.argv[1] == 'emu_nocell' :
-        USE_VIRTUAL_SENSE_HAT = True
-        USE_CELL_MODEM = False
-        eth_dev = find_wnc_eth(eth_dev)
-    elif sys.argv[1] == 'noemu_nocell' :
-        USE_VIRTUAL_SENSE_HAT = False
-        USE_CELL_MODEM = False
-        eth_dev = find_wnc_eth(eth_dev)        
-    if USE_VIRTUAL_SENSE_HAT == True :
-        from sense_emu import SenseHat
-        print "Using Sense Hat Emulator"
-    else :
-        from sense_hat import SenseHat
-        print "Real Sense Hat Detected"
-    sense = SenseHat()
-    sense.clear()
-else:
-    print_usage()
-    exit(0)
 
-if USE_CELL_MODEM == True :
-    import serial
-    from bars import AtCellModem_14A2A
-
-######################################################
-#  A few setup items:
-######################################################
-    
-# Base parameters used to connect to the FLOW demo
-FLOW_SERVER_URL1 = 'runm-east.att.io'
-FLOW_BASE_URL1 = '/ce323678bacc7/d235133ae3dc/0e68c11f947776c/in/flow'
-FLOW_INPUT_NAME1 = "/climate"
-MAX_NUM_SENSORS = 8
-MAX_NUM_SENSE_ROWS = 8
-REBOOT_HOLD_TIME = 10
-NUM_POSITION_READINGS_AVG = 1
-DISCONNECTED_LED_RGB_HTTP = [64, 0, 0]
-DISCONNECTED_LED_RGB = [64, 64, 64]
-UART_READ_TIMEOUT_SECS = 2
-WATCHDOG_CNT_MAX = 10
-HTTP_CONNECTION_TIMEOUT = 10
-FIRMWARE_PATH = '/home/pi/senseflowdemo1'
-
-# Assign server based upon selected ID
-UrlById = [FLOW_SERVER_URL1,
-           FLOW_SERVER_URL1,
-           FLOW_SERVER_URL1,
-           FLOW_SERVER_URL1,
-           FLOW_SERVER_URL1,
-           FLOW_SERVER_URL1,
-           FLOW_SERVER_URL1,
-           FLOW_SERVER_URL1]
-
-FlowPathById = [FLOW_BASE_URL1 + FLOW_INPUT_NAME1,
-                FLOW_BASE_URL1 + FLOW_INPUT_NAME1,
-                FLOW_BASE_URL1 + FLOW_INPUT_NAME1,
-                FLOW_BASE_URL1 + FLOW_INPUT_NAME1,
-                FLOW_BASE_URL1 + FLOW_INPUT_NAME1,
-                FLOW_BASE_URL1 + FLOW_INPUT_NAME1,
-                FLOW_BASE_URL1 + FLOW_INPUT_NAME1,
-                FLOW_BASE_URL1 + FLOW_INPUT_NAME1]
-              
-
-def display_bars(bars, sense_hat):    
-    if bars < 1 :
-        bars = 0
-        f = [255,0,0]
-    else :
-        f = [0,0,255]
+    if USE_CELL_MODEM == True :
+        import serial
+        from bars import AtCellModem_14A2A
         
-    b = [0,0,0]
-
-    if bars == 0 :
-        rgb_pixels = \
-        [b,b,b,b,b,b,b,b,
-         b,b,b,b,b,b,b,b,
-         b,b,b,b,b,b,b,b,
-         b,b,b,b,b,b,b,b,
-         b,b,b,b,b,b,b,b,
-         b,b,b,b,b,b,b,b,
-         b,b,b,b,b,b,b,b,
-         f,b,b,b,b,b,b,b]
-    elif bars == 1 :
-        rgb_pixels = \
-        [b,b,b,b,b,b,b,b,
-         b,b,b,b,b,b,b,b,
-         b,b,b,b,b,b,b,b,
-         b,b,b,b,b,b,b,b,
-         b,b,b,b,b,b,b,b,
-         b,b,b,b,b,b,b,b,
-         b,f,b,b,b,b,b,b,
-         b,f,b,b,b,b,b,b]
-    elif bars == 2 :
-        rgb_pixels = \
-        [b,b,b,b,b,b,b,b,
-         b,b,b,b,b,b,b,b,
-         b,b,b,b,b,b,b,b,
-         b,b,b,b,b,b,b,b,
-         b,b,b,f,b,b,b,b,
-         b,b,b,f,b,b,b,b,
-         b,f,b,f,b,b,b,b,
-         b,f,b,f,b,b,b,b]
-    elif bars == 3 :
-        rgb_pixels = \
-        [b,b,b,b,b,b,b,b,
-         b,b,b,b,b,b,b,b,
-         b,b,b,b,b,f,b,b,
-         b,b,b,b,b,f,b,b,
-         b,b,b,f,b,f,b,b,
-         b,b,b,f,b,f,b,b,
-         b,f,b,f,b,f,b,b,
-         b,f,b,f,b,f,b,b]
-    else :
-        rgb_pixels = \
-        [b,b,b,b,b,b,b,f,
-         b,b,b,b,b,b,b,f,
-         b,b,b,b,b,f,b,f,
-         b,b,b,b,b,f,b,f,
-         b,b,b,f,b,f,b,f,
-         b,b,b,f,b,f,b,f,
-         b,f,b,f,b,f,b,f,
-         b,f,b,f,b,f,b,f]
-
-    sense_hat.clear()
-    sense_hat.set_pixels(rgb_pixels)
-
-######### Program begin
-try :
+    make_rainbow(sense, 5, .02)
+                  
+    ######### Action begins
     if USE_CELL_MODEM == True :
         while 1 :
             try :
@@ -338,7 +164,7 @@ try :
         # Wait for a few AT OKs, wait until.
         wait_for_at_ok(at_mdm, sense)
 
-    # Enter main loop, select the ID
+    # Enter main loop, only reboot will exit.  Show bars, get ID start reading sensors
     while 1 :
         if USE_CELL_MODEM == True :
             # Poll mdm with AT commands to see if we're connected and measure signal strength
@@ -375,7 +201,11 @@ try :
                          id = MAX_NUM_SENSORS 
                     if (button_events.direction == "middle") :
                         idIsNotDone = 0 
-                sense.show_letter(str(id), text_colour = [255,0,0], back_colour = [0,0,255])
+                if id < 10 :
+                    sense.show_letter(str(id), text_colour = [255,0,0], back_colour = [0,0,255])
+                else :
+                    sense.show_message(str(id) + " ", scroll_speed = 0.05, text_colour = [255, 0, 0], back_colour = [0,0,255])
+                    sense.show_letter('#', text_colour = [255,0,0], back_colour = [0,0,255])
         
         if (id > 99) :
             serialName = "SenseHat" + str(id)    
@@ -392,9 +222,10 @@ try :
         bars_on = False
         blank_pos = 0
         WatchDogCnt = 0
-        
+
         # Poll the sense hat and report the results to the Flow server
         # Wait for server reply and update LED Matrix with the results
+        # Reset to the Pi will exit this loop and return to bars and ID setup!
         while 1 :
             if USE_CELL_MODEM == True :
                 # Poll mdm with AT commands to see if we're connected to device serial port
@@ -424,10 +255,9 @@ try :
                     if mdm_connected == False :
                         mdm_rsrp = mdm_rssi = 0
             else :
-                # If no modem genearate data like it is...
+                # If no modem, genearate data like it is...
                 mdm_rsrp = mdm_rssi = 0
                 mdm_connected = True  # Override since this could be because the user doesn't have a cell and ordered it to ignore.
-            
             # Read PI HAT Sensor data to send to the Flow program via an http get request
             tempstr = str(round(sense.temp))
             humiditystr = str(round(sense.humidity))
@@ -617,7 +447,198 @@ try :
                 subprocess.call("sudo shutdown -r now &", shell=True)
                 exit(0)
 
-except KeyboardInterrupt:
-    my_ctrl_c_exit(eth_dev)
-except:
-    my_ctrl_c_exit(eth_dev)
+def print_usage() :
+    print
+    print 'usage: atthatflow.py [emu_cell | noemu_cell | emu_nocell | noemu_nocell]'
+    print
+    print 'If no command lines then default is virtual sense hat and no cellular modem'
+    print
+    print '    emu_cell = Use Virtual Sense Emulator and Cellular WNC modem'
+    print '    noemu_cell = Use real Sense Emulator and Cellular WNC modem'
+    print '    emu_nocell = Use Virtual Sense Emulator and use other internet connection'
+    print '    moemu_nocell = Use real Sense Emulator and use other internet connection'
+    print
+
+def my_ctrl_c_exit(eth_dev) :
+    if eth_dev <> "none" :
+        subprocess.call("sudo route delete default " + eth_dev, shell=True)
+        print "Deleting WNC modem " + eth_dev + " from default route table"
+    os._exit(-1)  #  plain exit() raises exceptions and doesn't truly exit, this one does!
+
+def display_mdm_bars(mdm, sense_hat):
+    bars = mdm.calc_rx_bars(1)  # Danger danger, leave at 1, 14A2A can't handle back to back
+    display_bars(bars, sense_hat)
+    #if bars == -1 :
+        #sense_hat.show_message("Invalid cell signal read!", scroll_speed = 0.05, text_colour = [255, 0, 0])
+    
+def find_wnc_usb_device():        
+    subprocess.call("lsusb -t -d 1435:3142 | grep acm > wnc_dev.lst", shell=True)
+    result = os.path.getsize("wnc_dev.lst") > 0
+    subprocess.call("rm wnc_dev.lst", shell=True)
+    return result
+
+def find_wnc_comport():
+    if find_wnc_usb_device() == True :
+        # Find the last 3 entries in dmesg and pick off the 1st one, that will be the AT port
+        subprocess.call("dmesg | grep ttyACM | tail -3 | head -1 > wnc_dev.lst", shell=True)
+        if os.path.getsize("wnc_dev.lst") > 0 :
+            for i in range(0,10) :
+                subprocess.call("dmesg | grep ttyACM | tail -3 | head -1 | grep ttyACM" + str(i) + " > wnc_dev.lst", shell=True)
+                if os.path.getsize("wnc_dev.lst") > 0 :
+                    subprocess.call("rm wnc_dev.lst", shell=True)
+                    print "Found WNC ttyACM" + str(i) + " device"
+                    return "/dev/ttyACM" + str(i)
+        subprocess.call("rm wnc_dev.lst", shell=True)
+    print "WNC serial port not found!"
+    return "none"
+
+# This assumes that the WNC is the only cdc_ether attached to the Pi!
+def find_wnc_eth(eth_dev):
+    if eth_dev <> "none" :
+        print "Remove " + eth_dev + " from global route table"    
+        subprocess.call("sudo route delete default " + eth_dev, shell=True)    
+    if find_wnc_usb_device() == True :
+        # Try to find which eth it's at:
+        for i in range(0,10):
+            subprocess.call("dmesg | grep cdc_ether | grep eth" + str(i) + " | tail -1 > wnc_dev.lst", shell=True)
+            if os.path.getsize("wnc_dev.lst") > 0 :
+                subprocess.call("rm wnc_dev.lst", shell=True)
+                eth_dev = "eth" + str(i)
+                print "Found WNC " + eth_dev
+                # Try to make the IP traffic use the cellular modem which should which show up as ethX
+                print "Making " + eth_dev + " be default in global route table"
+                subprocess.call("sudo route add default " + eth_dev, shell=True)
+                return "eth" + str(i)
+        subprocess.call("rm wnc_dev.lst", shell=True)
+    print "WNC eth not found!"
+    return "none"
+
+def find_wnc_devices(eth_dev):
+    com_dev = find_wnc_comport()
+    eth_dev = find_wnc_eth(eth_dev)
+    return com_dev, eth_dev
+
+def wait_for_at_ok(mdm, sense_hat, debug=False) :
+    sense_hat.show_message("Wait for AT OK", scroll_speed = 0.03, text_colour = [255, 0, 0])
+    cnt = 0
+    while 1:
+        result, resp = mdm.send_mdm_cmd('AT', timeout=1)
+        sense_hat.show_message(".", scroll_speed = 0.01, text_colour = [255, 0, 0])
+        if result == True :
+           cnt += 1
+        else :
+           cnt = 0
+        if cnt >= 4 :
+            sense_hat.show_message("AT OK", scroll_speed = 0.03, text_colour = [255, 0, 0])
+            break
+
+def make_rainbow(sense_hat, num_display_secs, twinkle_time = 0) :
+    from colorsys import hsv_to_rgb
+    from time import sleep
+    from time import time
+
+    # Hues represent the spectrum of colors as values between 0 and 1. The range
+    # is circular so 0 represents red, ~0.2 is yellow, ~0.33 is green, 0.5 is cyan,
+    # ~0.66 is blue, ~0.84 is purple, and 1.0 is back to red. These are the initial
+    # hues for each pixel in the display.
+    hues = [
+        0.00, 0.00, 0.06, 0.13, 0.20, 0.27, 0.34, 0.41,
+        0.00, 0.06, 0.13, 0.21, 0.28, 0.35, 0.42, 0.49,
+        0.07, 0.14, 0.21, 0.28, 0.35, 0.42, 0.50, 0.57,
+        0.15, 0.22, 0.29, 0.36, 0.43, 0.50, 0.57, 0.64,
+        0.22, 0.29, 0.36, 0.44, 0.51, 0.58, 0.65, 0.72,
+        0.30, 0.37, 0.44, 0.51, 0.58, 0.66, 0.73, 0.80,
+        0.38, 0.45, 0.52, 0.59, 0.66, 0.73, 0.80, 0.87,
+        0.45, 0.52, 0.60, 0.67, 0.74, 0.81, 0.88, 0.95,
+    ]
+    def scale(v):
+        return int(v*255)
+
+    num_display_secs = abs(num_display_secs) + 1  # +1 to make sure at least 1 sec!
+    startTime = time()
+    l = 0.0
+    while (time() - startTime) < num_display_secs :
+        # Rotate the hues
+        hues = [(h + 0.04) % 1.0 for h in hues]
+        l = (l + .02) % .8
+        ll = .2 + l
+        # Convert the hues to RGB values
+        pixels = [hsv_to_rgb(h, 1.0, ll) for h in hues]
+        # hsv_to_rgb returns 0..1 floats; convert to ints in the range 0..255
+        pixels = [(scale(r), scale(g), scale(b)) for r, g, b in pixels]
+        # Update the display
+        sense_hat.set_pixels(pixels)
+        sleep(twinkle_time)
+
+def display_bars(bars, sense_hat):    
+    if bars < 1 :
+        bars = 0
+        f = [255,0,0]
+    else :
+        f = [0,0,255]
+        
+    b = [0,0,0]
+
+    if bars == 0 :
+        rgb_pixels = \
+        [b,b,b,b,b,b,b,b,
+         b,b,b,b,b,b,b,b,
+         b,b,b,b,b,b,b,b,
+         b,b,b,b,b,b,b,b,
+         b,b,b,b,b,b,b,b,
+         b,b,b,b,b,b,b,b,
+         b,b,b,b,b,b,b,b,
+         f,b,b,b,b,b,b,b]
+    elif bars == 1 :
+        rgb_pixels = \
+        [b,b,b,b,b,b,b,b,
+         b,b,b,b,b,b,b,b,
+         b,b,b,b,b,b,b,b,
+         b,b,b,b,b,b,b,b,
+         b,b,b,b,b,b,b,b,
+         b,b,b,b,b,b,b,b,
+         b,f,b,b,b,b,b,b,
+         b,f,b,b,b,b,b,b]
+    elif bars == 2 :
+        rgb_pixels = \
+        [b,b,b,b,b,b,b,b,
+         b,b,b,b,b,b,b,b,
+         b,b,b,b,b,b,b,b,
+         b,b,b,b,b,b,b,b,
+         b,b,b,f,b,b,b,b,
+         b,b,b,f,b,b,b,b,
+         b,f,b,f,b,b,b,b,
+         b,f,b,f,b,b,b,b]
+    elif bars == 3 :
+        rgb_pixels = \
+        [b,b,b,b,b,b,b,b,
+         b,b,b,b,b,b,b,b,
+         b,b,b,b,b,f,b,b,
+         b,b,b,b,b,f,b,b,
+         b,b,b,f,b,f,b,b,
+         b,b,b,f,b,f,b,b,
+         b,f,b,f,b,f,b,b,
+         b,f,b,f,b,f,b,b]
+    else :
+        rgb_pixels = \
+        [b,b,b,b,b,b,b,f,
+         b,b,b,b,b,b,b,f,
+         b,b,b,b,b,f,b,f,
+         b,b,b,b,b,f,b,f,
+         b,b,b,f,b,f,b,f,
+         b,b,b,f,b,f,b,f,
+         b,f,b,f,b,f,b,f,
+         b,f,b,f,b,f,b,f]
+
+    sense_hat.clear()
+    sense_hat.set_pixels(rgb_pixels)
+
+try :
+    main()
+except :
+    my_ctrl_c_exit(eth_dev)   
+#except Exception as ex:
+    #import traceback
+    #print traceback.format_exc()    
+    #import pdb
+    #pdb.post_mortem()    
