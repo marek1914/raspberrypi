@@ -22,9 +22,11 @@ Select ID to control Pi: <select name=Address id="senseId">
 <p></p>
 <div class="aligncenter" style="width:525px;"><hr /></div>
 <p></p>
-<b>Available Actions:</b>
+<b>Available Auto Actions:</b>
 <p></p>
 Message: <input type="text" id="msgText" name="Message" value="">    <button onclick="pokeFlow('msg')">Send Message</button>
+<p></p>
+Custom Action: <input type="text" id="actionText" name="Custom Action" value="">    <button onclick="pokeFlow('action')">Send Action</button>
 <p></p>
 <button onclick="pokeFlow('hi')">Display Heat Index</button>
 <p></p>
@@ -130,6 +132,15 @@ function pokeFlow(buttonAction) {
         return
     }
 
+    // Custom action takes action from input
+    if (buttonAction == 'action') {
+        var actionBox = document.getElementById('actionText')
+        if (actionBox.value == '')
+            buttonAction = 'none'
+        else
+            buttonAction = actionBox.value
+    }
+
     // Sanity check msg
 	if (buttonAction == 'msg') {
 		var msgBox = document.getElementById('msgText')
@@ -159,7 +170,6 @@ function pokeFlow(buttonAction) {
     // Setup the URL and data value payload to Flow
     var FLOW_SERVER_URL = 'runm-east.att.io'
     var FLOW_BASE_URL = '/ce323678bacc7/d235133ae3dc/0e68c11f947776c/in/flow'
-    var FLOW_URL_TYPE = '' // ' HTTP/1.1\r\nHost: '
 	var FLOW_INPUT_NAME = '/sendmessage?'
     var FLOW_DATA = 'deviceId=' + addr + '&key=' + password + '&message=' + msgContent + '&action=' + buttonAction + ' '
     var flowendpointUrl = FLOW_BASE_URL + FLOW_INPUT_NAME + FLOW_DATA

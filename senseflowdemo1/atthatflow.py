@@ -27,13 +27,19 @@ import httplib
 import json
 
 # Global variables that contains the cell modem device names
-eth_dev = "none"
-com_dev = "none"
+ETH_DEV = "none"
+COM_DEV = "none"
+USE_VIRTUAL_SENSE_HAT = False
+USE_CELL_MODEM = True
+SENSE = ""
 
 def main():
 
-    global eth_dev
-    global com_dev
+    global ETH_DEV
+    global COM_DEV
+    global USE_VIRTUAL_SENSE_HAT
+    global USE_CELL_MODEM
+    global SENSE
     
     ######################################################
     #  A few setup items:
@@ -72,97 +78,47 @@ def main():
                     FLOW_BASE_URL1 + FLOW_INPUT_NAME1,
                     FLOW_BASE_URL1 + FLOW_INPUT_NAME1,
                     FLOW_BASE_URL1 + FLOW_INPUT_NAME1]
-
-    # Parse command line inputs to setup emu or sense hat or cell or no cell:
-    if len(sys.argv) == 1 :
-        # Try to autodetect sense hat and cellular modem
-        try :
-            from sense_hat import SenseHat
-            sense = SenseHat()
-            USE_VIRTUAL_SENSE_HAT = False
-            print "Real Sense Hat Detected"
-        except KeyboardInterrupt :
-            my_ctrl_c_exit(eth_dev)
-        except :
-            from sense_emu import SenseHat
-            sense = SenseHat()
-            sense.clear()     
-            USE_VIRTUAL_SENSE_HAT = True 
-            print "Using Sense Hat Emulator"
-        com_dev, eth_dev = find_wnc_devices(eth_dev)
-        USE_CELL_MODEM = com_dev <> "none"    
-    elif len(sys.argv) == 2 :
-        if sys.argv[1] == '--help' :
-            print_usage()
-            exit(0)
-        elif sys.argv[1] == 'emu_cell' :
-            USE_VIRTUAL_SENSE_HAT = True
-            com_dev, eth_dev = find_wnc_devices(eth_dev)
-            USE_CELL_MODEM = com_dev <> "none"    
-        elif sys.argv[1] == 'noemu_cell' :
-            USE_VIRTUAL_SENSE_HAT = False
-            com_dev, eth_dev = find_wnc_devices(eth_dev)
-            USE_CELL_MODEM = com_dev <> "none"    
-        elif sys.argv[1] == 'emu_nocell' :
-            USE_VIRTUAL_SENSE_HAT = True
-            USE_CELL_MODEM = False
-            eth_dev = find_wnc_eth(eth_dev)
-        elif sys.argv[1] == 'noemu_nocell' :
-            USE_VIRTUAL_SENSE_HAT = False
-            USE_CELL_MODEM = False
-            eth_dev = find_wnc_eth(eth_dev)        
-        if USE_VIRTUAL_SENSE_HAT == True :
-            from sense_emu import SenseHat
-            print "Using Sense Hat Emulator"
-        else :
-            from sense_hat import SenseHat
-            print "Real Sense Hat Detected"
-        sense = SenseHat()
-        sense.clear()
-    else:
-        print_usage()
-        exit(0)
+    
+    parse_cmd_line()
 
     if USE_CELL_MODEM == True :
         import serial
         from bars import AtCellModem_14A2A
         
-    make_rainbow(sense, 5, .02)
-                  
     ######### Action begins
     if USE_CELL_MODEM == True :
         while 1 :
             try :
-                uart = serial.Serial(com_dev, 115200, timeout=UART_READ_TIMEOUT_SECS)
+                uart = serial.Serial(COM_DEV, 115200, timeout=UART_READ_TIMEOUT_SECS)
                 break
             except KeyboardInterrupt:
-                my_ctrl_c_exit(eth_dev)
+                my_ctrl_c_exit(ETH_DEV)
             except:
-                sense.show_message("Unable to talk to Modem", scroll_speed = 0.05, text_colour = [255, 0, 0])
-                sense.show_message("Recheck USB...", scroll_speed = 0.05, text_colour = [255, 0, 0])
+                SENSE.show_message("Unable to talk to Modem", scroll_speed = 0.05, text_colour = [255, 0, 0])
+                SENSE.show_message("Recheck USB...", scroll_speed = 0.05, text_colour = [255, 0, 0])
 
         # Attempt open close
         for n in range(20, 1, -1):
-                uart.close()
-                uart.open()
-                if uart.isOpen() == True :
-                    sense.show_message(uart.name, scroll_speed = 0.03, text_colour = [255, 0, 0])         
-                    break;
-                else :
-                    sense.show_message("Wait Mdm Serial " + str(n), scroll_speed = 0.03, text_colour = [255, 0, 0])
+            uart.close()
+            uart.open()
+            if uart.isOpen() == True :
+                SENSE.show_message(uart.name, scroll_speed = 0.03, text_colour = [255, 0, 0])         
+                break;
+            else :
+                SENSE.show_message("Wait Mdm Serial " + str(n), scroll_speed = 0.03, text_colour = [255, 0, 0])
 
         # Create AT modem controller object, validate serial with modem type
         at_mdm = AtCellModem_14A2A(uart, timeout=UART_READ_TIMEOUT_SECS) #, dbgFileName = '/home/pi/at.log')
         no_type = True
         while no_type == True :
-            sense.show_message("Type: " + str(at_mdm.modem_type), scroll_speed = 0.03, text_colour = [255, 0, 0])
+            SENSE.show_message("Type: " + str(at_mdm.modem_type), scroll_speed = 0.03, text_colour = [255, 0, 0])
             at_mdm.get_version()
             no_type = (at_mdm.modem_type == 'None') or (at_mdm.modem_type == 'command')
             if (at_mdm.modem_type == 'command') :
-                sense.show_message("FAIL: modem in serial debug mode, power cycle and reconnect modem!", scroll_speed = 0.03, text_colour = [255, 0, 0])        
+                SENSE.show_message("FAIL: modem in serial debug mode, power cycle and reconnect modem!", scroll_speed = 0.03, text_colour = [255, 0, 0])        
 
         # Wait for a few AT OKs, wait until.
-        wait_for_at_ok(at_mdm, sense)
+        wait_for_at_ok(at_mdm, SENSE)
 
     # Enter main loop, only reboot will exit.  Show bars, get ID start reading sensors
     while 1 :
@@ -172,8 +128,8 @@ def main():
             while idIsNotDone == 1 :
                 # Show bars
                 #print 'Update bars'
-                display_mdm_bars(at_mdm, sense)
-                for button_events in sense.stick.get_events() :
+                display_mdm_bars(at_mdm, SENSE)
+                for button_events in SENSE.stick.get_events() :
                     if (button_events.direction == "middle") :
                         idIsNotDone = 0
                 # 14A2A cannot handle just hitting it hard with read signal strength
@@ -182,14 +138,14 @@ def main():
         
         # Handle possible double push
         time.sleep(.3)
-        for button_events in sense.stick.get_events() : dummy = 1
+        for button_events in SENSE.stick.get_events() : dummy = 1
             
         # Gather user input for setting serial device name
         id = 1
-        sense.show_letter(str(id), text_colour = [255,0,0], back_colour = [0,0,255])
+        SENSE.show_letter(str(id), text_colour = [255,0,0], back_colour = [0,0,255])
         idIsNotDone = 1 
         while idIsNotDone == 1 :
-            for button_events in sense.stick.get_events() :
+            for button_events in SENSE.stick.get_events() :
                 if (button_events.action == "pressed") :
                     if (button_events.direction == "down" or button_events.direction == "right") :
                          id -= 1
@@ -202,10 +158,10 @@ def main():
                     if (button_events.direction == "middle") :
                         idIsNotDone = 0 
                 if id < 10 :
-                    sense.show_letter(str(id), text_colour = [255,0,0], back_colour = [0,0,255])
+                    SENSE.show_letter(str(id), text_colour = [255,0,0], back_colour = [0,0,255])
                 else :
-                    sense.show_message(str(id) + " ", scroll_speed = 0.05, text_colour = [255, 0, 0], back_colour = [0,0,255])
-                    sense.show_letter('#', text_colour = [255,0,0], back_colour = [0,0,255])
+                    SENSE.show_message(str(id) + " ", scroll_speed = 0.05, text_colour = [255, 0, 0], back_colour = [0,0,255])
+                    SENSE.show_letter('#', text_colour = [255,0,0], back_colour = [0,0,255])
         
         if (id > 99) :
             serialName = "SenseHat" + str(id)    
@@ -214,8 +170,8 @@ def main():
         else :
             serialName = "SenseHat00" + str(id)        
 
-        sense.clear()
-        for button_events in sense.stick.get_events() : tmp = 1 # Empty Event Queue
+        SENSE.clear()
+        for button_events in SENSE.stick.get_events() : tmp = 1 # Empty Event Queue
         reboot_pi_timer = time.time() # Initialize the variable, cause a push and hold causes trouble
         sig_display = False
         mdm_rsrp = mdm_rssi = 0
@@ -239,19 +195,19 @@ def main():
                 else :
                     at_mdm.uart.close()
                     try :
-                        com_dev, eth_dev = find_wnc_devices(eth_dev)
-                        if com_dev <> "none" :
-                            at_mdm.uart = serial.Serial(com_dev, 115200, timeout=UART_READ_TIMEOUT_SECS)
-                            sense.show_message("Re-connecting " + com_dev, scroll_speed = 0.05, text_colour = [255, 0, 0])
-                            wait_for_at_ok(at_mdm, sense)  # This will wait forever to get an AT OK
+                        COM_DEV, ETH_DEV = find_wnc_devices(ETH_DEV)
+                        if COM_DEV <> "none" :
+                            at_mdm.uart = serial.Serial(COM_DEV, 115200, timeout=UART_READ_TIMEOUT_SECS)
+                            SENSE.show_message("Re-connecting " + COM_DEV, scroll_speed = 0.05, text_colour = [255, 0, 0])
+                            wait_for_at_ok(at_mdm, SENSE)  # This will wait forever to get an AT OK
                             mdm_connected = True
                         else :
                             mdm_connected = False
                     except KeyboardInterrupt:
-                        my_ctrl_c_exit(eth_dev)
+                        my_ctrl_c_exit(ETH_DEV)
                     except:
                         mdm_connected = False
-                        sense.show_message("Unable to open Serial port", scroll_speed = 0.05, text_colour = [255, 0, 0])
+                        SENSE.show_message("Unable to open Serial port", scroll_speed = 0.05, text_colour = [255, 0, 0])
                     if mdm_connected == False :
                         mdm_rsrp = mdm_rssi = 0
             else :
@@ -259,12 +215,12 @@ def main():
                 mdm_rsrp = mdm_rssi = 0
                 mdm_connected = True  # Override since this could be because the user doesn't have a cell and ordered it to ignore.
             # Read PI HAT Sensor data to send to the Flow program via an http get request
-            tempstr = str(round(sense.temp))
-            humiditystr = str(round(sense.humidity))
-            pressurestr = str(round(sense.pressure))
+            tempstr = str(round(SENSE.temp))
+            humiditystr = str(round(SENSE.humidity))
+            pressurestr = str(round(SENSE.pressure))
             accelZ = accelY = accelX = 0 
             for i in range(1, NUM_POSITION_READINGS_AVG + 1) :
-                orientation = sense.get_gyroscope()
+                orientation = SENSE.get_gyroscope()
                 accelZ += -180 + orientation["pitch"]
                 accelY += -180 + orientation["roll"]
                 accelX += -180 + orientation["yaw"]
@@ -275,7 +231,7 @@ def main():
 
             # Button time!
             button1 = button2 = button3 = button4 = button5 = "0"
-            buttons = sense.stick.get_events() 
+            buttons = SENSE.stick.get_events() 
             for button_events in buttons :
                 #print button_events.action
                 #print button_events.direction
@@ -289,7 +245,7 @@ def main():
                 if button_events.action == "held" :
                     if button_events.direction == "middle" :
                         if (time.time() - reboot_pi_timer) > REBOOT_HOLD_TIME :
-                            sense.clear()                    
+                            SENSE.clear()                    
                             subprocess.call("sudo reboot &", shell=True)
                             exit(0)
 
@@ -327,33 +283,33 @@ def main():
                     conn.close()
                     httpSuccess = True
                 except KeyboardInterrupt :
-                    my_ctrl_c_exit(eth_dev)
+                    my_ctrl_c_exit(ETH_DEV)
                 except httplib.HTTPException:
-                    sense.show_message("HTTP response/close Exception ", scroll_speed = 0.04, text_colour = [255, 0, 0])            
+                    SENSE.show_message("HTTP response/close Exception ", scroll_speed = 0.04, text_colour = [255, 0, 0])            
                     try :
                         conn.close()
                     except KeyboardInterrupt :
-                        my_ctrl_c_exit(eth_dev)
+                        my_ctrl_c_exit(ETH_DEV)
                     except :
-                        sense.show_message("HTTP close Exception ", scroll_speed = 0.04, text_colour = [255, 0, 0])                
+                        SENSE.show_message("HTTP close Exception ", scroll_speed = 0.04, text_colour = [255, 0, 0])                
                 except :
-                    sense.show_message("HTTP Host unreachable ", scroll_speed = 0.04, text_colour = [255, 0, 0])
+                    SENSE.show_message("HTTP Host unreachable ", scroll_speed = 0.04, text_colour = [255, 0, 0])
             except KeyboardInterrupt:
-                my_ctrl_c_exit(eth_dev)
+                my_ctrl_c_exit(ETH_DEV)
             except httplib.HTTPException:
-                sense.show_message("HTTP open Exception ", scroll_speed = 0.04, text_colour = [255, 0, 0])                
+                SENSE.show_message("HTTP open Exception ", scroll_speed = 0.04, text_colour = [255, 0, 0])                
             except :
-                sense.show_message("HTTP general ERR1 ", scroll_speed = 0.04, text_colour = [255, 0, 0])            
+                SENSE.show_message("HTTP general ERR1 ", scroll_speed = 0.04, text_colour = [255, 0, 0])            
 
             if httpSuccess == False or mdm_connected == False :
-                pixels = sense.get_pixels()
+                pixels = SENSE.get_pixels()
                 if httpSuccess == False :
                     led_rgb = DISCONNECTED_LED_RGB_HTTP
                 else :
                     led_rgb = DISCONNECTED_LED_RGB
                 for r in range(0,64,8) :
                     pixels[r] = led_rgb
-                sense.set_pixels(pixels)
+                SENSE.set_pixels(pixels)
 
             # Echo whether the server accepted the GET request
             #print "Server http reply:", reply.status, reply.reason
@@ -371,32 +327,36 @@ def main():
                     action = parsedjson['action']
                     if action != 'none' :
                         print action
-                    if action == 'update' :
-                        sense.show_message("Firmware update begin...", scroll_speed = 0.03, text_colour = [255, 0, 0])
-                        subprocess.call("wget -P " + FIRMWARE_PATH + " www.fredkellerman.com/atthatflow.py", shell=True)
-                        subprocess.call("wget -P " + FIRMWARE_PATH + " www.fredkellerman.com/bars.py", shell=True)
-                        subprocess.call("chmod 0700 " + FIRMWARE_PATH + "/bars.py.1", shell=True)
-                        subprocess.call("chmod 0700 " + FIRMWARE_PATH + "/atthatflow.py.1", shell=True)
-                        subprocess.call("mv " + FIRMWARE_PATH + "/bars.py.1 " + FIRMWARE_PATH + "/bars.py", shell=True)
-                        subprocess.call("mv " + FIRMWARE_PATH + "/atthatflow.py.1 " + FIRMWARE_PATH + "/atthatflow.py", shell=True)
-                        sense.show_message("Firmware update complete!", scroll_speed = 0.03, text_colour = [255, 0, 0])
-                    if action == 'reboot' :
-                        subprocess.call("sudo shutdown -r now &", shell=True)
-                        sense.clear()
-                        while (1) : a = 1
-                    if action == 'shutdown' :
-                        subprocess.call("sudo shutdown now &", shell=True)
-                        sense.clear()              
-                        while (1) : a = 1
-                    if action == 'reset' :
-                        break
-                    if action == 'hi' :
-                        hiMsg = 'Heat Index: ' + parsedjson['computedHeatIndexC'] + 'C'
-                        sense.show_message(hiMsg, scroll_speed = 0.05, text_colour = [255, 255, 0])
-                    if action == 'signalon' :
-                        bars_on = True
-                    if action == 'signaloff' :
-                        bars_on = False
+                        if action == 'update' :
+                            SENSE.show_message("Firmware update begin...", scroll_speed = 0.03, text_colour = [255, 0, 0])
+                            subprocess.call("wget -P " + FIRMWARE_PATH + " www.fredkellerman.com/atthatflow.py", shell=True)
+                            subprocess.call("wget -P " + FIRMWARE_PATH + " www.fredkellerman.com/bars.py", shell=True)
+                            subprocess.call("chmod 0700 " + FIRMWARE_PATH + "/bars.py.1", shell=True)
+                            subprocess.call("chmod 0700 " + FIRMWARE_PATH + "/atthatflow.py.1", shell=True)
+                            subprocess.call("mv " + FIRMWARE_PATH + "/bars.py.1 " + FIRMWARE_PATH + "/bars.py", shell=True)
+                            subprocess.call("mv " + FIRMWARE_PATH + "/atthatflow.py.1 " + FIRMWARE_PATH + "/atthatflow.py", shell=True)
+                            SENSE.show_message("Firmware update complete!", scroll_speed = 0.03, text_colour = [255, 0, 0])
+                        elif action == 'reboot' :
+                            subprocess.call("sudo shutdown -r now &", shell=True)
+                            SENSE.clear()
+                            while (1) : a = 1
+                        elif action == 'shutdown' :
+                            subprocess.call("sudo shutdown now &", shell=True)
+                            SENSE.clear()              
+                            while (1) : a = 1
+                        elif action == 'reset' :
+                            break
+                        elif action == 'hi' :
+                            hiMsg = 'Heat Index: ' + parsedjson['computedHeatIndexC'] + 'C'
+                            SENSE.show_message(hiMsg, scroll_speed = 0.05, text_colour = [255, 255, 0])
+                        elif action == 'signalon' :
+                            bars_on = True
+                        elif action == 'signaloff' :
+                            bars_on = False
+                        elif action == 'none' :
+                            action = 'none'
+                        else :
+                            SENSE.show_message("Unknown action: " + action, scroll_speed = 0.05, text_colour = [255, 255, 0])
 
                     # Move a dot at the rate of the FLOW responses
                     blank_pos = (blank_pos + 1) % 8
@@ -404,14 +364,14 @@ def main():
                     # Check the mailbox
                     msg = parsedjson["MSG"]
                     if msg != "" :
-                        sense.show_message(msg, scroll_speed = 0.05, text_colour = [255, 255, 0], back_colour = [0, 0, 128])
+                        SENSE.show_message(msg, scroll_speed = 0.05, text_colour = [255, 255, 0], back_colour = [0, 0, 128])
 
                     # Signal bars if turned on else colored rows
-                    if (bars_on == True) and (com_dev <> "none") :
+                    if (bars_on == True) and (COM_DEV <> "none") :
                         if USE_CELL_MODEM == True :
-                            display_mdm_bars(at_mdm, sense)
+                            display_mdm_bars(at_mdm, SENSE)
                         else :
-                            display_bars(-1, sense)
+                            display_bars(-1, SENSE)
                     else:
                         rgbLEDs = []
                         for i in range(0, min(MAX_NUM_SENSORS,MAX_NUM_SENSE_ROWS)) :
@@ -426,24 +386,24 @@ def main():
                                 rgbLEDRow[(blank_pos + 2) % 8] = [0,0,0]
                                 rgbLEDRow[(blank_pos + 3) % 8] = [0,0,0]
                             rgbLEDs += rgbLEDRow
-                        sense.set_pixels(rgbLEDs)
+                        SENSE.set_pixels(rgbLEDs)
                     try :
                         a = 1
                     except KeyboardInterrupt :
-                        my_ctrl_c_exit(eth_dev)
+                        my_ctrl_c_exit(ETH_DEV)
                     except :
-                        sense.show_message("JSON ERROR ", scroll_speed = 0.04, text_colour = [255, 0, 0])
+                        SENSE.show_message("JSON ERROR ", scroll_speed = 0.04, text_colour = [255, 0, 0])
                         break
                 else:
                     WatchDogCnt += 1
-                    sense.show_message("HTTP GET: rejected ", scroll_speed = 0.04, text_colour = [255, 0, 0])
+                    SENSE.show_message("HTTP GET: rejected ", scroll_speed = 0.04, text_colour = [255, 0, 0])
             else:
                 WatchDogCnt += 1
-                sense.show_message("HTTP GET: not sent ", scroll_speed = 0.04, text_colour = [255, 0, 0])
+                SENSE.show_message("HTTP GET: not sent ", scroll_speed = 0.04, text_colour = [255, 0, 0])
             
             if WatchDogCnt >= WATCHDOG_CNT_MAX :
-                sense.show_message("Watchdog Expired: Rebooting...", scroll_speed = 0.03, text_colour = [255, 0, 0])            
-                sense.clear()
+                SENSE.show_message("Watchdog Expired: Rebooting...", scroll_speed = 0.03, text_colour = [255, 0, 0])            
+                SENSE.clear()
                 subprocess.call("sudo shutdown -r now &", shell=True)
                 exit(0)
 
@@ -560,7 +520,7 @@ def make_rainbow(sense_hat, num_display_secs, twinkle_time = 0) :
     while (time() - startTime) < num_display_secs :
         # Rotate the hues
         hues = [(h + 0.04) % 1.0 for h in hues]
-        l = (l + .02) % .8
+        l = (l + .01) % .8
         ll = .2 + l
         # Convert the hues to RGB values
         pixels = [hsv_to_rgb(h, 1.0, ll) for h in hues]
@@ -633,10 +593,71 @@ def display_bars(bars, sense_hat):
     sense_hat.clear()
     sense_hat.set_pixels(rgb_pixels)
 
+def parse_cmd_line() :
+    global USE_VIRTUAL_SENSE_HAT
+    global USE_CELL_MODEM
+    global SENSE
+    global ETH_DEV
+    global COM_DEV
+    
+    # Parse command line inputs to setup emu or SENSE hat or cell or no cell:
+    if len(sys.argv) == 1 :
+        # Try to autodetect SENSE hat and cellular modem
+        try :
+            from sense_hat import SenseHat
+            SENSE = SenseHat()
+            USE_VIRTUAL_SENSE_HAT = False
+            print "Real Sense Hat Detected"
+        except KeyboardInterrupt :
+            my_ctrl_c_exit(ETH_DEV)
+        except :
+            from sense_emu import SenseHat
+            SENSE = SenseHat()
+            SENSE.clear()     
+            USE_VIRTUAL_SENSE_HAT = True 
+            print "Using Sense Hat Emulator"
+        COM_DEV, ETH_DEV = find_wnc_devices(ETH_DEV)
+        USE_CELL_MODEM = COM_DEV <> "none"    
+    elif len(sys.argv) == 2 :
+        if sys.argv[1] == '--help' :
+            print_usage()
+            exit(0)
+        elif sys.argv[1] == 'emu_cell' :
+            USE_VIRTUAL_SENSE_HAT = True
+            COM_DEV, ETH_DEV = find_wnc_devices(ETH_DEV)
+            USE_CELL_MODEM = COM_DEV <> "none"    
+        elif sys.argv[1] == 'noemu_cell' :
+            USE_VIRTUAL_SENSE_HAT = False
+            COM_DEV, ETH_DEV = find_wnc_devices(ETH_DEV)
+            USE_CELL_MODEM = COM_DEV <> "none"    
+        elif sys.argv[1] == 'emu_nocell' :
+            USE_VIRTUAL_SENSE_HAT = True
+            USE_CELL_MODEM = False
+            ETH_DEV = find_wnc_eth(ETH_DEV)
+        elif sys.argv[1] == 'noemu_nocell' :
+            USE_VIRTUAL_SENSE_HAT = False
+            USE_CELL_MODEM = False
+            ETH_DEV = find_wnc_eth(ETH_DEV)
+        else :
+            print_usage()
+            exit(0)
+            
+        if USE_VIRTUAL_SENSE_HAT == True :
+            from sense_emu import SenseHat
+            print "Using Sense Hat Emulator"
+        else :
+            from sense_hat import SenseHat
+            print "Real Sense Hat Detected"
+        SENSE = SenseHat()
+        SENSE.clear()
+    else:
+        print_usage()
+        exit(0)
+
 try :
     main()
 except :
-    my_ctrl_c_exit(eth_dev)   
+    my_ctrl_c_exit(ETH_DEV)   
 #except Exception as ex:
     #import traceback
     #print traceback.format_exc()    
