@@ -58,9 +58,17 @@ def main():
                FLOW_SERVER_URL1,
                FLOW_SERVER_URL1,
                FLOW_SERVER_URL1,
+               FLOW_SERVER_URL1,
+               FLOW_SERVER_URL1,
+               FLOW_SERVER_URL1,
+               FLOW_SERVER_URL1,
                FLOW_SERVER_URL1]
 
     FlowPathById = [FLOW_BASE_URL1 + FLOW_INPUT_NAME1,
+                    FLOW_BASE_URL1 + FLOW_INPUT_NAME1,
+                    FLOW_BASE_URL1 + FLOW_INPUT_NAME1,
+                    FLOW_BASE_URL1 + FLOW_INPUT_NAME1,
+                    FLOW_BASE_URL1 + FLOW_INPUT_NAME1,
                     FLOW_BASE_URL1 + FLOW_INPUT_NAME1,
                     FLOW_BASE_URL1 + FLOW_INPUT_NAME1,
                     FLOW_BASE_URL1 + FLOW_INPUT_NAME1,
@@ -79,7 +87,9 @@ def main():
     WATCHDOG_CNT_MAX = 10
     HTTP_CONNECTION_TIMEOUT = 10
     FIRMWARE_PATH = '/home/pi/senseflowdemo1'
-    
+    FIRMWARE_URL = 'www.fredkellerman.com'
+
+    # Use cmd line options to setup    
     parse_cmd_line()
 
     if USE_CELL_MODEM == True :
@@ -326,8 +336,8 @@ def main():
                         print action
                         if action == 'update' :
                             SENSE.show_message("Firmware update begin...", scroll_speed = 0.03, text_colour = [255, 0, 0])
-                            subprocess.call("wget -P " + FIRMWARE_PATH + " www.fredkellerman.com/atthatflow.py", shell=True)
-                            subprocess.call("wget -P " + FIRMWARE_PATH + " www.fredkellerman.com/bars.py", shell=True)
+                            subprocess.call("wget -P " + FIRMWARE_PATH + " " + FIRMWARE_URL + "/atthatflow.py", shell=True)
+                            subprocess.call("wget -P " + FIRMWARE_PATH + " " + FIRMWARE_URL + "/bars.py", shell=True)
                             subprocess.call("chmod 0700 " + FIRMWARE_PATH + "/bars.py.1", shell=True)
                             subprocess.call("chmod 0700 " + FIRMWARE_PATH + "/atthatflow.py.1", shell=True)
                             subprocess.call("mv " + FIRMWARE_PATH + "/bars.py.1 " + FIRMWARE_PATH + "/bars.py", shell=True)
@@ -352,6 +362,7 @@ def main():
                             bars_on = False
                         elif action == 'none' or action == 'msg' :
                             action = action
+                        # Add your own actions here
                         else :
                             SENSE.show_message("Unknown action: " + action, scroll_speed = 0.05, text_colour = [255, 255, 0])
 
@@ -371,18 +382,26 @@ def main():
                             display_bars(-1, SENSE)
                     else:
                         rgbLEDs = []
-                        for i in range(0, min(MAX_NUM_SENSORS,MAX_NUM_SENSE_ROWS)) :
-                            rLedColor = int(parsedjson["R" + str(i % MAX_NUM_SENSE_ROWS + 1)])
-                            gLedColor = int(parsedjson["G" + str(i % MAX_NUM_SENSE_ROWS + 1)])
-                            bLedColor = int(parsedjson["B" + str(i % MAX_NUM_SENSE_ROWS + 1)])
+                        if id <= MAX_NUM_SENSE_ROWS :
+                            row_range = range(1, MAX_NUM_SENSE_ROWS + 1)
+                        else :
+                            modN = MAX_NUM_SENSORS - MAX_NUM_SENSE_ROWS + 1
+                            row_range = range(1, modN)
+                            row_range = [MAX_NUM_SENSE_ROWS + e for e in row_range] + [e for e in row_range]
+                        for i in row_range :
+                            rLedColor = int(parsedjson["R" + str(i)])
+                            gLedColor = int(parsedjson["G" + str(i)])
+                            bLedColor = int(parsedjson["B" + str(i)])
                             rgbLEDRow = [[rLedColor, gLedColor, bLedColor]]
+                            # print "row: " + str(i) + "rgb: " + str(rLedColor) + " " + str(gLedColor) + " " + str(bLedColor)
                             rgbLEDRow *= 8
-                            if i == ((id - 1) % MAX_NUM_SENSE_ROWS) :
+                            if i == id :
                                 rgbLEDRow[blank_pos] = [0,0,0]
                                 rgbLEDRow[(blank_pos + 1) % 8] = [0,0,0]
                                 rgbLEDRow[(blank_pos + 2) % 8] = [0,0,0]
                                 rgbLEDRow[(blank_pos + 3) % 8] = [0,0,0]
                             rgbLEDs += rgbLEDRow
+                        # Now pick 8 out of the potentially > 8 row data
                         SENSE.set_pixels(rgbLEDs)
                     try :
                         a = 1
@@ -467,7 +486,7 @@ def find_wnc_eth(eth_dev):
                 subprocess.call("sudo route add default " + eth_dev, shell=True)
                 return "eth" + str(i)
         subprocess.call("rm wnc_dev.lst", shell=True)
-    print "WNC eth not found!"
+    print "WNC eth not found! (maybe told not to use it via cmd line)"
     return "none"
 
 def find_wnc_devices(eth_dev):
