@@ -69,7 +69,6 @@ def main():
     WATCHDOG_CNT_MAX = 10
     HTTP_CONNECTION_TIMEOUT = 10
     FIRMWARE_PATH = '/home/pi/senseflowdemo1'
-    FIRMWARE_URL = 'www.fredkellerman.com'
 
     # Use cmd line options to setup    
     parse_cmd_line()
