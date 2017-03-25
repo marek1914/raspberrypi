@@ -49,35 +49,17 @@ def main():
     FLOW_SERVER_URL1 = 'runm-east.att.io'
     FLOW_BASE_URL1 = '/ce323678bacc7/d235133ae3dc/0e68c11f947776c/in/flow'
     FLOW_INPUT_NAME1 = "/climate"
+    
+    FLOW_SERVER_URL2 = 'run-west.att.io'
+    FLOW_BASE_URL2 = '/83d370c69e410/69332c11db3f/4e73cd2917f04c8/in/flow'
+    FLOW_INPUT_NAME2 = "/climate"
 
-    # Assign server based upon selected ID
-    UrlById = [FLOW_SERVER_URL1,
-               FLOW_SERVER_URL1,
-               FLOW_SERVER_URL1,
-               FLOW_SERVER_URL1,
-               FLOW_SERVER_URL1,
-               FLOW_SERVER_URL1,
-               FLOW_SERVER_URL1,
-               FLOW_SERVER_URL1,
-               FLOW_SERVER_URL1,
-               FLOW_SERVER_URL1,
-               FLOW_SERVER_URL1,
-               FLOW_SERVER_URL1]
-
-    FlowPathById = [FLOW_BASE_URL1 + FLOW_INPUT_NAME1,
-                    FLOW_BASE_URL1 + FLOW_INPUT_NAME1,
-                    FLOW_BASE_URL1 + FLOW_INPUT_NAME1,
-                    FLOW_BASE_URL1 + FLOW_INPUT_NAME1,
-                    FLOW_BASE_URL1 + FLOW_INPUT_NAME1,
-                    FLOW_BASE_URL1 + FLOW_INPUT_NAME1,
-                    FLOW_BASE_URL1 + FLOW_INPUT_NAME1,
-                    FLOW_BASE_URL1 + FLOW_INPUT_NAME1,
-                    FLOW_BASE_URL1 + FLOW_INPUT_NAME1,
-                    FLOW_BASE_URL1 + FLOW_INPUT_NAME1,
-                    FLOW_BASE_URL1 + FLOW_INPUT_NAME1,
-                    FLOW_BASE_URL1 + FLOW_INPUT_NAME1]
+    # Assign server based upon user selection
+    MAX_NUM_FLOW_SERVERS = 2
+    flowUrls = [FLOW_SERVER_URL1, FLOW_SERVER_URL2]
+    flowPaths = [FLOW_BASE_URL1 + FLOW_INPUT_NAME1, FLOW_BASE_URL2 + FLOW_INPUT_NAME2]
                     
-    MAX_NUM_SENSORS = 12
+    MAX_NUM_SENSORS = 8  # M2X developer accounts only officially support 10, the code below currently only handles up to 12!
     MAX_NUM_SENSE_ROWS = 8
     REBOOT_HOLD_TIME = 10
     NUM_POSITION_READINGS_AVG = 1
@@ -95,7 +77,7 @@ def main():
     if USE_CELL_MODEM == True :
         import serial
         from bars import AtCellModem_14A2A
-        
+
     ######### Action begins
     if USE_CELL_MODEM == True :
         while 1 :
@@ -150,25 +132,44 @@ def main():
         # Handle possible double push
         time.sleep(.3)
         for button_events in SENSE.stick.get_events() : dummy = 1
+        
+        # Gather user input for picking flow server URL
+        url_index = 0
+        SENSE.show_letter(str(url_index + 1), text_colour = [255,0,0], back_colour = [0,0,0])
+        notDone = 1
+        while notDone == 1 :
+            for button_events in SENSE.stick.get_events() :
+                if (button_events.action == "pressed") :
+                    if (button_events.direction == "down" or button_events.direction == "right") :
+                        url_index -= 1
+                    elif (button_events.direction == "up" or button_events.direction == "left") :
+                        url_index += 1
+                    if (url_index + 1) > MAX_NUM_FLOW_SERVERS :
+                        url_index = 0
+                    if (url_index < 0) :
+                        url_index = MAX_NUM_FLOW_SERVERS - 1
+                    SENSE.show_letter(str(url_index + 1), text_colour = [255,0,0], back_colour = [0,0,0])                        
+                    if (button_events.direction == "middle") :
+                        notDone = 0
             
         # Gather user input for setting serial device name
         id = 1
-        SENSE.show_letter(str(id), text_colour = [255,0,0], back_colour = [0,0,255])
+        display_id(id, SENSE, MAX_NUM_SENSORS)
         idIsNotDone = 1 
         while idIsNotDone == 1 :
             for button_events in SENSE.stick.get_events() :
                 if (button_events.action == "pressed") :
                     if (button_events.direction == "down" or button_events.direction == "right") :
                          id -= 1
-                    if (button_events.direction == "up" or button_events.direction == "left") :
+                    elif (button_events.direction == "up" or button_events.direction == "left") :
                          id += 1
                     if (id > MAX_NUM_SENSORS) :
                          id = 1
                     if (id < 1) :
                          id = MAX_NUM_SENSORS 
+                    display_id(id, SENSE, MAX_NUM_SENSORS)                        
                     if (button_events.direction == "middle") :
                         idIsNotDone = 0
-                    display_id(id, SENSE, MAX_NUM_SENSORS)                        
         
         if (id > 99) :
             serialName = "SenseHat" + str(id)    
@@ -257,7 +258,7 @@ def main():
                             exit(0)
 
             # This is the GET request body, it will be parsed by the Flow server and a response will be given in the form of a JSON string with a color
-            getflow = FlowPathById[id - 1] + \
+            getflow = flowPaths[url_index] + \
                       "?serial=" + serialName + \
                       "&measuredTempC=" + tempstr + \
                       "&measuredHumidity=" + humiditystr + \
@@ -280,7 +281,7 @@ def main():
             httpSuccess = False        
             # Connect to the Flow server and send the request
             try :
-                conn = httplib.HTTPSConnection(UrlById[id-1], timeout = HTTP_CONNECTION_TIMEOUT)
+                conn = httplib.HTTPSConnection(flowUrls[url_index], timeout = HTTP_CONNECTION_TIMEOUT)
                 try :
                     conn.request("GET", getflow)
                     # Wait and obtain the response from the server
@@ -314,7 +315,7 @@ def main():
                     led_rgb = DISCONNECTED_LED_RGB_HTTP
                 else :
                     led_rgb = DISCONNECTED_LED_RGB
-                for r in range(0,64,8) :
+                for r in range(0,64,MAX_NUM_SENSE_ROWS) :
                     pixels[r] = led_rgb
                 SENSE.set_pixels(pixels)
 
@@ -367,14 +368,14 @@ def main():
                             SENSE.show_message("Unknown action: " + action, scroll_speed = 0.05, text_colour = [255, 255, 0])
 
                     # Move a dot at the rate of the FLOW responses
-                    blank_pos = (blank_pos + 1) % 8
+                    blank_pos = (blank_pos + 1) % MAX_NUM_SENSE_ROWS
 
                     # Check the mailbox
                     msg = parsedjson["MSG"]
                     if msg != "" :
                         SENSE.show_message(msg, scroll_speed = 0.05, text_colour = [255, 255, 0], back_colour = [0, 0, 128])
 
-                    # Signal bars if turned on else colored rows
+                    # Signal bars if turned on else coloured rows
                     if (bars_on == True) and (COM_DEV <> "none") :
                         if USE_CELL_MODEM == True :
                             display_mdm_bars(at_mdm, SENSE)
@@ -394,14 +395,13 @@ def main():
                             bLedColor = int(parsedjson["B" + str(i)])
                             rgbLEDRow = [[rLedColor, gLedColor, bLedColor]]
                             # print "row: " + str(i) + "rgb: " + str(rLedColor) + " " + str(gLedColor) + " " + str(bLedColor)
-                            rgbLEDRow *= 8
+                            rgbLEDRow *= MAX_NUM_SENSE_ROWS
                             if i == id :
                                 rgbLEDRow[blank_pos] = [0,0,0]
-                                rgbLEDRow[(blank_pos + 1) % 8] = [0,0,0]
-                                rgbLEDRow[(blank_pos + 2) % 8] = [0,0,0]
-                                rgbLEDRow[(blank_pos + 3) % 8] = [0,0,0]
+                                rgbLEDRow[(blank_pos + 1) % MAX_NUM_SENSE_ROWS] = [0,0,0]
+                                rgbLEDRow[(blank_pos + 2) % MAX_NUM_SENSE_ROWS] = [0,0,0]
+                                rgbLEDRow[(blank_pos + 3) % MAX_NUM_SENSE_ROWS] = [0,0,0]
                             rgbLEDs += rgbLEDRow
-                        # Now pick 8 out of the potentially > 8 row data
                         SENSE.set_pixels(rgbLEDs)
                     try :
                         a = 1
