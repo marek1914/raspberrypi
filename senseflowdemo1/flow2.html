@@ -40,7 +40,7 @@ Custom Action: <input type="text" id="actionText" name="Custom Action" value="">
 <p></p>
 <button onclick="pokeFlow('reset')">Reset</button>
 <p></p>
-<button onclick="pokeFlow('update')">Update Firmware</button>
+<button onclick="pokeFlow('update')">Update Firmware</button> <input type="text" id="updateText" name="Update" value="" size = "50">
 <p></p>
 <button onclick="pokeFlow('reboot')">Reboot</button>
 <p></p>
@@ -54,12 +54,10 @@ HTTP Response: <input type="text" id="respText" name="Response" value="" size="2
 <p></p>
 <b>Online/Offline Status:</b>
 <p></p>
-Device 1: <input type="text" id="active1" name="Active Status" value="" size="10">  Device 7: <input type="text" id="active5" name="Active Status" value="" size="10"><br><br>
-Device 2: <input type="text" id="active2" name="Active Status" value="" size="10">  Device 8: <input type="text" id="active6" name="Active Status" value="" size="10"><br><br>
-Device 3: <input type="text" id="active3" name="Active Status" value="" size="10">  Device 9: <input type="text" id="active7" name="Active Status" value="" size="10"><br><br>
-Device 4: <input type="text" id="active4" name="Active Status" value="" size="10">  Device 10: <input type="text" id="active8" name="Active Status" value="" size="10"><br><br>
-Device 5: <input type="text" id="active4" name="Active Status" value="" size="10">  Device 11: <input type="text" id="active8" name="Active Status" value="" size="10"><br><br>
-Device 6: <input type="text" id="active4" name="Active Status" value="" size="10">  Device 12: <input type="text" id="active8" name="Active Status" value="" size="10"><br><br>
+Device 1: <input type="text" id="active1" name="Active Status" value="" size="10">  Device 5: <input type="text" id="active5" name="Active Status" value="" size="10"><br><br>
+Device 2: <input type="text" id="active2" name="Active Status" value="" size="10">  Device 6: <input type="text" id="active6" name="Active Status" value="" size="10"><br><br>
+Device 3: <input type="text" id="active3" name="Active Status" value="" size="10">  Device 7: <input type="text" id="active7" name="Active Status" value="" size="10"><br><br>
+Device 4: <input type="text" id="active4" name="Active Status" value="" size="10">  Device 8: <input type="text" id="active8" name="Active Status" value="" size="10"><br><br>
 
 <script>
 
@@ -132,6 +130,11 @@ function pokeFlow(buttonAction) {
             buttonAction = 'none'
         else
             buttonAction = actionBox.value
+    }
+
+    if (buttonAction == 'update') {
+        var updateBox = document.getElementById('updateText')
+        buttonAction = buttonAction + updateBox.value
     }
 
     // Sanity check msg

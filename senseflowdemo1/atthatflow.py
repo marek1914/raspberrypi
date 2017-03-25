@@ -335,10 +335,13 @@ def main():
                     action = parsedjson['action']
                     if action != 'none' :
                         print action
-                        if action == 'update' :
+                        if action.find('update') <> -1 :
+                            action = action[6:]  # remove 'update' the rest is the URL/path/
+                            print "parsed URL: " + action
                             SENSE.show_message("Firmware update begin...", scroll_speed = 0.03, text_colour = [255, 0, 0])
-                            subprocess.call("wget -P " + FIRMWARE_PATH + " " + FIRMWARE_URL + "/atthatflow.py", shell=True)
-                            subprocess.call("wget -P " + FIRMWARE_PATH + " " + FIRMWARE_URL + "/bars.py", shell=True)
+                            subprocess.call("mkdir " + FIRMWARE_PATH, shell=True)
+                            subprocess.call("wget -P " + FIRMWARE_PATH + " " + action + "/atthatflow.py", shell=True)
+                            subprocess.call("wget -P " + FIRMWARE_PATH + " " + action + "/bars.py", shell=True)
                             subprocess.call("chmod 0700 " + FIRMWARE_PATH + "/bars.py.1", shell=True)
                             subprocess.call("chmod 0700 " + FIRMWARE_PATH + "/atthatflow.py.1", shell=True)
                             subprocess.call("mv " + FIRMWARE_PATH + "/bars.py.1 " + FIRMWARE_PATH + "/bars.py", shell=True)
