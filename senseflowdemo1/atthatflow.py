@@ -80,6 +80,7 @@ def main():
     ######### Action begins
     if USE_CELL_MODEM == True :
         while 1 :
+            COM_DEV, ETH_DEV = find_wnc_devices(ETH_DEV)
             try :
                 uart = serial.Serial(COM_DEV, 115200, timeout=UART_READ_TIMEOUT_SECS)
                 break
@@ -637,25 +638,18 @@ def parse_cmd_line() :
         COM_DEV, ETH_DEV = find_wnc_devices(ETH_DEV)
         USE_CELL_MODEM = COM_DEV <> "none"    
     elif len(sys.argv) == 2 :
-        if sys.argv[1] == '--help' :
-            print_usage()
-            exit(0)
-        elif sys.argv[1] == 'emu_cell' :
+        if sys.argv[1] == 'emu_cell' :
             USE_VIRTUAL_SENSE_HAT = True
-            COM_DEV, ETH_DEV = find_wnc_devices(ETH_DEV)
-            USE_CELL_MODEM = COM_DEV <> "none"    
+            USE_CELL_MODEM = True    
         elif sys.argv[1] == 'noemu_cell' :
             USE_VIRTUAL_SENSE_HAT = False
-            COM_DEV, ETH_DEV = find_wnc_devices(ETH_DEV)
-            USE_CELL_MODEM = COM_DEV <> "none"    
+            USE_CELL_MODEM = True    
         elif sys.argv[1] == 'emu_nocell' :
             USE_VIRTUAL_SENSE_HAT = True
             USE_CELL_MODEM = False
-            ETH_DEV = find_wnc_eth(ETH_DEV)
         elif sys.argv[1] == 'noemu_nocell' :
             USE_VIRTUAL_SENSE_HAT = False
             USE_CELL_MODEM = False
-            ETH_DEV = find_wnc_eth(ETH_DEV)
         else :
             print_usage()
             exit(0)
