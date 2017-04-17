@@ -25,6 +25,7 @@ import sys
 import subprocess 
 import httplib
 import json
+from setupflowpaths import setup_flow_paths
 
 # Global variables that contains the cell modem device names
 ETH_DEV = "none"
@@ -44,30 +45,34 @@ def main():
     ######################################################
     #  A few setup items:
     ######################################################
-        
-    # Base parameters used to connect to the FLOW demo
-    FLOW_SERVER_URL1 = 'runm-east.att.io'
-    FLOW_BASE_URL1 = '/ce323678bacc7/d235133ae3dc/0e68c11f947776c/in/flow'
-    FLOW_INPUT_NAME1 = "/climate"
     
-    FLOW_SERVER_URL2 = 'run-west.att.io'
-    FLOW_BASE_URL2 = '/83d370c69e410/69332c11db3f/4e73cd2917f04c8/in/flow'
-    FLOW_INPUT_NAME2 = "/climate"
+    # Setup flow server paths
+    flowurls, flowpaths, max_num_flow_servers = setup_flow_paths()
 
-    # Assign server based upon user selection
-    MAX_NUM_FLOW_SERVERS = 2
-    flowUrls = [FLOW_SERVER_URL1, FLOW_SERVER_URL2]
-    flowPaths = [FLOW_BASE_URL1 + FLOW_INPUT_NAME1, FLOW_BASE_URL2 + FLOW_INPUT_NAME2]
-                    
-    MAX_NUM_SENSORS = 8  # M2X developer accounts only officially support 10, the code below currently only handles up to 12!
+    # Free M2X developer accounts only officially support 10 devices/sensors,
+    # no limit in Flow itself BUT you must also modify the number of devices
+    # in the Flow program!    
+    MAX_NUM_SENSORS = 8
+    
+    # 8 Max LED rows in s Pi Sense Hat, can be more if using something else
     MAX_NUM_SENSE_ROWS = 8
-    REBOOT_HOLD_TIME = 10
+    # How long a constant press and hold of the middle sense hat joystick will
+    # take to cause an exit of this program
+    REBOOT_HOLD_TIME = 7
+    # How many times to average the Pi Sense Hat positional sensors
     NUM_POSITION_READINGS_AVG = 1
+    # Color of LED when showing an HTTP issue
     DISCONNECTED_LED_RGB_HTTP = [64, 0, 0]
+    # Color of LED when modem cell signal becomes disconnected
     DISCONNECTED_LED_RGB = [64, 64, 64]
+    # How long to wait for a response from the cellular modem serial port
     UART_READ_TIMEOUT_SECS = 2
+    # How many times an HTTP connection will fail before the program
+    # reboots the Raspberry Pi
     WATCHDOG_CNT_MAX = 10
+    # How long to wait for an HTTP response back from the Flow server
     HTTP_CONNECTION_TIMEOUT = 10
+    # When using the remote firmware upgrade feature, where to put the downloaded file
     FIRMWARE_PATH = '/home/pi/senseflowdemo1'
 
     # Use cmd line options to setup    
@@ -96,7 +101,7 @@ def main():
             uart.open()
             if uart.isOpen() == True :
                 SENSE.show_message(uart.name, scroll_speed = 0.03, text_colour = [255, 0, 0])         
-                break;
+                break
             else :
                 SENSE.show_message("Wait Mdm Serial " + str(n), scroll_speed = 0.03, text_colour = [255, 0, 0])
 
@@ -144,10 +149,10 @@ def main():
                         url_index -= 1
                     elif (button_events.direction == "up" or button_events.direction == "left") :
                         url_index += 1
-                    if (url_index + 1) > MAX_NUM_FLOW_SERVERS :
+                    if (url_index + 1) > max_num_flow_servers :
                         url_index = 0
                     if (url_index < 0) :
-                        url_index = MAX_NUM_FLOW_SERVERS - 1
+                        url_index = max_num_flow_servers - 1
                     SENSE.show_letter(str(url_index + 1), text_colour = [255,0,0], back_colour = [0,0,0])                        
                     if (button_events.direction == "middle") :
                         notDone = 0
@@ -253,12 +258,12 @@ def main():
                 if button_events.action == "held" :
                     if button_events.direction == "middle" :
                         if (time.time() - reboot_pi_timer) > REBOOT_HOLD_TIME :
-                            SENSE.clear()                    
-                            subprocess.call("sudo reboot &", shell=True)
-                            exit(0)
+                            SENSE.clear()
+                            SENSE.show_message("Exiting program as requested", scroll_speed = 0.07, text_colour = [255, 0, 0])
+                            my_ctrl_c_exit(ETH_DEV)
 
             # This is the GET request body, it will be parsed by the Flow server and a response will be given in the form of a JSON string with a color
-            getflow = flowPaths[url_index] + \
+            getflow = flowpaths[url_index] + \
                       "?serial=" + serialName + \
                       "&measuredTempC=" + tempstr + \
                       "&measuredHumidity=" + humiditystr + \
@@ -281,7 +286,7 @@ def main():
             httpSuccess = False        
             # Connect to the Flow server and send the request
             try :
-                conn = httplib.HTTPSConnection(flowUrls[url_index], timeout = HTTP_CONNECTION_TIMEOUT)
+                conn = httplib.HTTPSConnection(flowurls[url_index], timeout = HTTP_CONNECTION_TIMEOUT)
                 try :
                     conn.request("GET", getflow)
                     # Wait and obtain the response from the server
@@ -337,15 +342,17 @@ def main():
                         print action
                         if action.find('update') <> -1 :
                             action = action[6:]  # remove 'update' the rest is the URL/path/
-                            print "parsed URL: " + action
-                            SENSE.show_message("Firmware update begin...", scroll_speed = 0.03, text_colour = [255, 0, 0])
+                            SENSE.show_message("Fimware update begin, parsed URL: " + action, scroll_speed = .03, text_colour = [255, 0, 0])
                             subprocess.call("mkdir " + FIRMWARE_PATH, shell=True)
                             subprocess.call("wget -P " + FIRMWARE_PATH + " " + action + "/atthatflow.py", shell=True)
                             subprocess.call("wget -P " + FIRMWARE_PATH + " " + action + "/bars.py", shell=True)
-                            subprocess.call("chmod 0700 " + FIRMWARE_PATH + "/bars.py.1", shell=True)
-                            subprocess.call("chmod 0700 " + FIRMWARE_PATH + "/atthatflow.py.1", shell=True)
+                            subprocess.call("wget -P " + FIRMWARE_PATH + " " + action + "/setupflowpaths.py", shell=True)                            
                             subprocess.call("mv " + FIRMWARE_PATH + "/bars.py.1 " + FIRMWARE_PATH + "/bars.py", shell=True)
                             subprocess.call("mv " + FIRMWARE_PATH + "/atthatflow.py.1 " + FIRMWARE_PATH + "/atthatflow.py", shell=True)
+                            subprocess.call("mv " + FIRMWARE_PATH + "/setupflowpaths.py.1 " + FIRMWARE_PATH + "/setupflowpaths.py", shell=True)                            
+                            subprocess.call("chmod 0700 " + FIRMWARE_PATH + "/bars.py", shell=True)
+                            subprocess.call("chmod 0700 " + FIRMWARE_PATH + "/atthatflow.py", shell=True)
+                            subprocess.call("chmod 0700 " + FIRMWARE_PATH + "/setupflowpaths.py", shell=True)
                             SENSE.show_message("Firmware update complete!", scroll_speed = 0.03, text_colour = [255, 0, 0])
                         elif action == 'reboot' :
                             subprocess.call("sudo shutdown -r now &", shell=True)
@@ -716,9 +723,9 @@ def display_id(id, sense_hat, max_num_sensors) :
 try :
     main()
 except :
-    my_ctrl_c_exit(ETH_DEV)   
     #except Exception as ex:
-    #import traceback
-    #print traceback.format_exc()    
+    import traceback
+    print traceback.format_exc()    
     #import pdb
     #pdb.post_mortem()
+    my_ctrl_c_exit(ETH_DEV)
