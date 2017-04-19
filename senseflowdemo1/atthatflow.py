@@ -85,15 +85,21 @@ def main():
     ######### Action begins
     if USE_CELL_MODEM == True :
         while 1 :
-            COM_DEV, ETH_DEV = find_wnc_devices(ETH_DEV)
+            while (COM_DEV == "none" or ETH_DEV == "none") :
+                COM_DEV, ETH_DEV = find_wnc_devices(ETH_DEV)
+                if (COM_DEV == "none") :
+                    SENSE.show_message("Unable to detect Modem COM port", scroll_speed = 0.04, text_colour = [255, 0, 0])
+                    SENSE.show_message("Recheck USB...", scroll_speed = 0.04, text_colour = [255, 0, 0])
+                elif (ETH_DEV == "none") :
+                    SENSE.show_message("Unable to detect Modem Ethernet", scroll_speed = 0.04, text_colour = [255, 0, 0])
+                    SENSE.show_message("Recheck USB...", scroll_speed = 0.04, text_colour = [255, 0, 0])
             try :
                 uart = serial.Serial(COM_DEV, 115200, timeout=UART_READ_TIMEOUT_SECS)
                 break
             except KeyboardInterrupt:
                 my_ctrl_c_exit(ETH_DEV)
             except:
-                SENSE.show_message("Unable to talk to Modem", scroll_speed = 0.05, text_colour = [255, 0, 0])
-                SENSE.show_message("Recheck USB...", scroll_speed = 0.05, text_colour = [255, 0, 0])
+                SENSE.show_message("Serial port unable to open", scroll_speed = 0.05, text_colour = [255, 0, 0])
 
         # Attempt open close
         for n in range(20, 1, -1):
