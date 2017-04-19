@@ -140,22 +140,23 @@ def main():
         
         # Gather user input for picking flow server URL
         url_index = 0
-        SENSE.show_letter(str(url_index + 1), text_colour = [255,0,0], back_colour = [0,0,0])
-        notDone = 1
-        while notDone == 1 :
-            for button_events in SENSE.stick.get_events() :
-                if (button_events.action == "pressed") :
-                    if (button_events.direction == "down" or button_events.direction == "right") :
-                        url_index -= 1
-                    elif (button_events.direction == "up" or button_events.direction == "left") :
-                        url_index += 1
-                    if (url_index + 1) > max_num_flow_servers :
-                        url_index = 0
-                    if (url_index < 0) :
-                        url_index = max_num_flow_servers - 1
-                    SENSE.show_letter(str(url_index + 1), text_colour = [255,0,0], back_colour = [0,0,0])                        
-                    if (button_events.direction == "middle") :
-                        notDone = 0
+        if max_num_flow_servers > 1 :
+            SENSE.show_letter(str(url_index + 1), text_colour = [255,0,0], back_colour = [0,0,0])
+            notDone = 1
+            while notDone == 1 :
+                for button_events in SENSE.stick.get_events() :
+                    if (button_events.action == "pressed") :
+                        if (button_events.direction == "down" or button_events.direction == "right") :
+                            url_index -= 1
+                        elif (button_events.direction == "up" or button_events.direction == "left") :
+                            url_index += 1
+                        if (url_index + 1) > max_num_flow_servers :
+                            url_index = 0
+                        if (url_index < 0) :
+                            url_index = max_num_flow_servers - 1
+                        SENSE.show_letter(str(url_index + 1), text_colour = [255,0,0], back_colour = [0,0,0])                        
+                        if (button_events.direction == "middle") :
+                            notDone = 0
             
         # Gather user input for setting serial device name
         id = 1
