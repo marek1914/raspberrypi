@@ -735,4 +735,7 @@ except :
     print traceback.format_exc()    
     #import pdb
     #pdb.post_mortem()
+    global SENSE
+    if SENSE <> "" :
+        SENSE.clear()
     my_ctrl_c_exit(ETH_DEV)
