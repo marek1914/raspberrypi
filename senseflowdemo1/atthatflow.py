@@ -73,7 +73,7 @@ def main():
     # How long to wait for an HTTP response back from the Flow server
     HTTP_CONNECTION_TIMEOUT = 10
     # When using the remote firmware upgrade feature, where to put the downloaded file
-    FIRMWARE_PATH = '/home/pi/senseflowdemo1'
+    FIRMWARE_PATH = './'
 
     # Use cmd line options to setup    
     parse_cmd_line()
