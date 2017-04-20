@@ -1,3 +1,3 @@
 #!/bin/bash
-wget http://sfmakers.nobleplasma.net/lab2/setupflowpaths.py
+wget -O ./setupflowpaths.py http://sfmakers.nobleplasma.net/lab2/setupflowpaths.py
 chmod +x ./setupflowpaths.py
