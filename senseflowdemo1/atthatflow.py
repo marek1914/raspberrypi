@@ -73,7 +73,7 @@ def main():
     # How long to wait for an HTTP response back from the Flow server
     HTTP_CONNECTION_TIMEOUT = 10
     # When using the remote firmware upgrade feature, where to put the downloaded file
-    FIRMWARE_PATH = './'
+    FIRMWARE_PATH = '/home/pi/senseflowdemo1'
 
     # Use cmd line options to setup    
     parse_cmd_line()
@@ -332,12 +332,14 @@ def main():
                 SENSE.set_pixels(pixels)
 
             # Echo whether the server accepted the GET request
-            #print "Server http reply:", reply.status, reply.reason
+            # print "Server http reply:", reply.status, reply.reason
             # Echo the response the server gave
             #print "Server response:", replystr
         
             if httpSuccess == True :
-                if reply.reason == "Accepted" :
+                # Accepted comes back when M2X is in the loop and a POST is done
+                # OK is what comes back when M2X is skipped and is the direct GET response
+                if reply.reason == "Accepted" or reply.reason ==  "OK" :
                     WatchDogCnt = 0
 
                     # Parse out the LED color from the json string
@@ -380,7 +382,7 @@ def main():
                             bars_on = False
                         elif action == 'none' or action == 'msg' :
                             action = action
-                        # Add your own actions here
+                        ######### Add your own custom actions above here!  ########
                         else :
                             SENSE.show_message("Unknown action: " + action, scroll_speed = 0.05, text_colour = [255, 255, 0])
 
