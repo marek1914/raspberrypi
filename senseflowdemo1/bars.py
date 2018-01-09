@@ -158,7 +158,7 @@ class AtCellModem_14A2A:
         return result, resp
         
     def is_on_network(self, debug=False):
-        if self.modem_type == "M14A2A":
+        if self.modem_type in ("M14A2A", "IMA3"):
             try:
                 cmd = 'AT+CREG?'
                 result, resp = self.send_mdm_cmd(cmd, timeout = 1, debug=debug)
@@ -186,7 +186,7 @@ class AtCellModem_14A2A:
     def calc_rx_bars(self, n, debug = False):
         n = int(round(n))
         if n < 1 : n = 1
-        if self.modem_type == "M14A2A":
+        if self.modem_type in ("M14A2A", "IMA3"):
             avg = 0
             for i in range(n) :
                 val = self.read_rsrp(debug=debug)
@@ -279,7 +279,7 @@ class AtCellModem_14A2A:
         # <Temperature>: integer, Degrees (C) for Temperature, -128 <= Temperature <= 128
         # <networkTTI>: integer, The subframe counter of the serving cell corresponds to the network UTC time. The subframe counter is a decimal running from 0 to 10239 (i.e. rollover at 10240) also known as TTI (Transmission Time Interval) counter.
         # <networkUtcTime>: integer, This field specifies the network UTC time which correspond to the specified TTI counter. The UTC time is a decimal counter of 1msec units counted since 00:00:00 on 1 January, 1900
-        if self.modem_type == "M14A2A":
+        if self.modem_type in ("M14A2A", "IMA3"):
             result, resp = self.send_mdm_cmd('AT%MEAS=\"' + str(type) + '\"', timeout=timeout, debug=debug)
             return result, resp
         else:
